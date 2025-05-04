@@ -9,7 +9,15 @@ const nextConfig = {
     AWS_BUCKET_NAME: process.env.AWS_BUCKET_NAME
   },
   images: {
-    domains: ['s3.amazonaws.com', 's3.eu-north-1.amazonaws.com'],
+    domains: [
+      's3.amazonaws.com',
+      's3.eu-north-1.amazonaws.com',
+      'cardakli-kosk-qr.s3.eu-north-1.amazonaws.com'
+    ],
+    minimumCacheTTL: 60,
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   async headers() {
     return [
@@ -32,6 +40,19 @@ const nextConfig = {
       },
     ]
   },
+  // Vercel için domain ayarları
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        destination: '/:path*',
+      },
+    ]
+  },
+  // Production build için optimizasyonlar
+  poweredByHeader: false,
+  compress: true,
+  productionBrowserSourceMaps: false,
 }
 
 module.exports = nextConfig 
