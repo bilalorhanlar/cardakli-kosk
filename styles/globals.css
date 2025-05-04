@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background-color: #141414;
+}
+
+.toast {
+  position: absolute;
+}
+
+.divider {
+  height: 1rem;
+}
+
+.wrapper {
+  display: grid;
+  height: 100vh;
+  place-items: center;
+}
