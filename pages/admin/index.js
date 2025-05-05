@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getMenuData, saveMenuData, uploadImage, getImageUrl, addCategory, deleteCategory, addItem, updateItem, deleteItem } from '../../lib/s3'
 import { useRouter } from 'next/router'
 
@@ -11,16 +11,29 @@ export default function Admin() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [imageUrls, setImageUrls] = useState({})
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryName_en, setNewCategoryName_en] = useState('')
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     price: '',
     shortDescription: '',
     longDescription: '',
-    image: null
+    image: null,
+    name_en: '',
+    shortDescription_en: '',
+    longDescription_en: ''
   })
+  const [searchQuery, setSearchQuery] = useState('')
+  const editFormRef = useRef(null)
 
   useEffect(() => {
+    // Token kontrolü
+    const token = localStorage.getItem('token')
+    if (!token) {
+      router.push('/admin/login')
+      return
+    }
+
     const loadMenuData = async () => {
       try {
         const data = await getMenuData()
@@ -49,7 +62,7 @@ export default function Admin() {
     }
 
     loadMenuData()
-  }, [])
+  }, [router])
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
@@ -58,27 +71,25 @@ export default function Admin() {
     }
 
     try {
-      // Türkçe karakterleri koru
       const normalizedCategoryName = newCategoryName.trim()
+      const normalizedCategoryName_en = newCategoryName_en.trim()
       
-      // Kategori adının benzersiz olduğunu kontrol et
       if (menuData[normalizedCategoryName]) {
         setError('Bu kategori zaten mevcut')
         return
       }
 
-      // Yeni kategoriyi ekle
-      const success = await addCategory(normalizedCategoryName)
+      const success = await addCategory(normalizedCategoryName, normalizedCategoryName_en)
       if (!success) {
         setError('Kategori eklenirken bir hata oluştu')
         return
       }
 
-      // Menü verilerini yeniden yükle
       const updatedMenuData = await getMenuData()
       setMenuData(updatedMenuData)
       setSelectedCategory(normalizedCategoryName)
       setNewCategoryName('')
+      setNewCategoryName_en('')
       setShowNewCategoryForm(false)
       setError(null)
 
@@ -104,7 +115,14 @@ export default function Admin() {
           categoryData.items[itemIndex] = {
             ...selectedItem,
             ...formData,
-            price
+            price,
+            translations: {
+              en: {
+                name: formData.name_en || formData.name,
+                shortDescription: formData.shortDescription_en || formData.shortDescription,
+                longDescription: formData.longDescription_en || formData.longDescription
+              }
+            }
           }
         }
       } else {
@@ -112,7 +130,14 @@ export default function Admin() {
         const newItem = {
           id: Date.now().toString(),
           ...formData,
-          price
+          price,
+          translations: {
+            en: {
+              name: formData.name_en || formData.name,
+              shortDescription: formData.shortDescription_en || formData.shortDescription,
+              longDescription: formData.longDescription_en || formData.longDescription
+            }
+          }
         }
         categoryData.items.push(newItem)
       }
@@ -125,7 +150,10 @@ export default function Admin() {
         price: '',
         shortDescription: '',
         longDescription: '',
-        image: null
+        image: null,
+        name_en: '',
+        shortDescription_en: '',
+        longDescription_en: ''
       })
       setSelectedItem(null)
     } catch (error) {
@@ -154,11 +182,19 @@ export default function Admin() {
     setSelectedItem(item)
     setFormData({
       name: item.name,
-      price: item.price.replace('₺', ''),
+      price: item.price,
       shortDescription: item.shortDescription || '',
       longDescription: item.longDescription || '',
-      image: null
+      image: item.image || null,
+      name_en: item.translations?.en?.name || '',
+      shortDescription_en: item.translations?.en?.shortDescription || '',
+      longDescription_en: item.translations?.en?.longDescription || ''
     })
+    
+    // Scroll to edit form
+    setTimeout(() => {
+      editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
   }
 
   const handleImageChange = async (e) => {
@@ -208,6 +244,19 @@ export default function Admin() {
     }
   };
 
+  const filteredItems = selectedCategory && menuData[selectedCategory]?.items.filter(item => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      item.name.toLowerCase().includes(query) ||
+      item.shortDescription?.toLowerCase().includes(query) ||
+      item.longDescription?.toLowerCase().includes(query) ||
+      item.translations?.en?.name?.toLowerCase().includes(query) ||
+      item.translations?.en?.shortDescription?.toLowerCase().includes(query) ||
+      item.translations?.en?.longDescription?.toLowerCase().includes(query)
+    );
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -225,20 +274,20 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#1a1a1a] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Menü Yönetimi</h1>
-            <p className="text-gray-500 mt-1">Tüm menü öğelerini buradan yönetebilirsiniz</p>
+            <h1 className="text-2xl font-semibold text-white">Menü Yönetimi</h1>
+            <p className="text-gray-400 mt-1">Tüm menü öğelerini buradan yönetebilirsiniz</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-            <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-lg p-2 w-full sm:w-auto">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-transparent text-gray-900 border-none focus:ring-0 rounded p-2 w-full sm:w-auto"
+                className="bg-transparent text-white border-none focus:ring-0 rounded p-2 w-full sm:w-auto"
               >
                 <option value="">Kategori Seçin</option>
                 {Object.keys(menuData).map((category) => (
@@ -259,58 +308,101 @@ export default function Admin() {
             </div>
             <button
               onClick={() => setShowNewCategoryForm(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors w-full sm:w-auto"
+              className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors w-full sm:w-auto"
             >
               Yeni Kategori Ekle
             </button>
           </div>
         </div>
 
-        {/* New Category Form */}
-        {showNewCategoryForm && (
-          <div className="mb-8 p-6 bg-gray-50 rounded-lg">
-            <h2 className="text-lg font-semibold mb-4 text-gray-900">Yeni Kategori Ekle</h2>
-            <div className="flex flex-col sm:flex-row gap-4">
+        {/* Search Bar */}
+        {selectedCategory && (
+          <div className="mb-8">
+            <div className="relative">
               <input
                 type="text"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Kategori adı"
-                className="flex-1 p-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Yemek ara..."
+                className="w-full p-4 bg-black/40 text-white border border-amber-500/20 rounded-lg placeholder-gray-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent pl-12"
               />
-              <div className="flex gap-4">
-                <button
-                  onClick={handleAddCategory}
-                  className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors w-full sm:w-auto"
-                >
-                  Ekle
-                </button>
-                <button
-                  onClick={() => {
-                    setShowNewCategoryForm(false);
-                    setNewCategoryName('');
-                    setError(null);
-                  }}
-                  className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors w-full sm:w-auto"
-                >
-                  İptal
-                </button>
+              <div className="absolute left-4 top-4 text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                </svg>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* New Category Form */}
+        {showNewCategoryForm && (
+          <div className="mb-8 p-6 bg-black/40 backdrop-blur-sm rounded-lg">
+            <h2 className="text-lg font-semibold mb-4 text-white">Yeni Kategori Ekle</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-white">Türkçe</h3>
+                <div>
+                  <label htmlFor="categoryName" className="block text-sm font-medium text-gray-300">Kategori Adı</label>
+                  <input
+                    type="text"
+                    id="categoryName"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Kategori adı"
+                    className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-white">English</h3>
+                <div>
+                  <label htmlFor="categoryName_en" className="block text-sm font-medium text-gray-300">Category Name</label>
+                  <input
+                    type="text"
+                    id="categoryName_en"
+                    value={newCategoryName_en}
+                    onChange={(e) => setNewCategoryName_en(e.target.value)}
+                    placeholder="Category name"
+                    className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={handleAddCategory}
+                className="bg-amber-500 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition-colors w-full sm:w-auto"
+              >
+                Ekle
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewCategoryForm(false);
+                  setNewCategoryName('');
+                  setNewCategoryName_en('');
+                  setError(null);
+                }}
+                className="bg-black/40 text-white px-6 py-3 rounded-lg hover:bg-black/60 transition-colors w-full sm:w-auto"
+              >
+                İptal
+              </button>
             </div>
             {error && <p className="text-red-500 mt-2">{error}</p>}
           </div>
         )}
 
         {/* Main Content */}
-        <div className="bg-white rounded-lg border border-gray-200">
+        <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-amber-500/20">
           <div className="p-6">
-            <h2 className="text-xl font-semibold mb-6 text-gray-900">Ürünler</h2>
+            <h2 className="text-xl font-semibold mb-6 text-white">Ürünler</h2>
             {selectedCategory ? (
               <>
                 {/* Products List */}
                 <div className="space-y-6 mb-8">
-                  {menuData[selectedCategory]?.items.map((item) => (
-                    <div key={item.id} className="border border-gray-200 p-6 rounded-lg hover:border-gray-300 transition-colors">
+                  {filteredItems?.map((item) => (
+                    <div key={item.id} className="border border-amber-500/20 p-6 rounded-lg hover:border-amber-500/40 transition-colors">
                       <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
                         <div className="flex flex-col sm:flex-row gap-6 w-full">
                           {item.image && (
@@ -325,15 +417,15 @@ export default function Admin() {
                             />
                           )}
                           <div className="flex-1">
-                            <h3 className="font-semibold text-lg text-gray-900">{item.name}</h3>
-                            <p className="text-blue-500 font-medium mt-1">{item.price}</p>
-                            <p className="text-gray-500 mt-2">{item.shortDescription}</p>
+                            <h3 className="font-semibold text-lg text-white">{item.name}</h3>
+                            <p className="text-amber-500 font-medium mt-1">{item.price}</p>
+                            <p className="text-gray-400 mt-2">{item.shortDescription}</p>
                           </div>
                         </div>
                         <div className="flex gap-3 w-full sm:w-auto">
                           <button
                             onClick={() => handleEdit(item)}
-                            className="text-blue-500 hover:text-blue-600 transition-colors w-full sm:w-auto"
+                            className="text-amber-500 hover:text-amber-600 transition-colors w-full sm:w-auto"
                           >
                             Düzenle
                           </button>
@@ -350,61 +442,101 @@ export default function Admin() {
                 </div>
 
                 {/* Add/Edit Product Form */}
-                <div className="border-t border-gray-200 pt-8">
-                  <h3 className="text-lg font-semibold mb-6 text-gray-900">
+                <div ref={editFormRef} className="border-t border-amber-500/20 pt-8">
+                  <h3 className="text-lg font-semibold mb-6 text-white">
                     {selectedItem ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}
                   </h3>
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">İsim</label>
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                          className="w-full p-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          required
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Türkçe alanlar */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium text-white">Türkçe</h3>
+                        <div>
+                          <label htmlFor="name" className="block text-sm font-medium text-gray-300">İsim</label>
+                          <input
+                            type="text"
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="shortDescription" className="block text-sm font-medium text-gray-300">Kısa Açıklama</label>
+                          <textarea
+                            id="shortDescription"
+                            value={formData.shortDescription}
+                            onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
+                            className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="longDescription" className="block text-sm font-medium text-gray-300">Uzun Açıklama</label>
+                          <textarea
+                            id="longDescription"
+                            value={formData.longDescription}
+                            onChange={(e) => setFormData({ ...formData, longDescription: e.target.value })}
+                            className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                            rows={5}
+                          />
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Fiyat</label>
-                        <input
-                          type="text"
-                          value={formData.price}
-                          onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
-                          className="w-full p-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          required
-                        />
+                      {/* İngilizce alanlar */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium text-white">English</h3>
+                        <div>
+                          <label htmlFor="name_en" className="block text-sm font-medium text-gray-300">Name</label>
+                          <input
+                            type="text"
+                            id="name_en"
+                            value={formData.name_en}
+                            onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
+                            className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="shortDescription_en" className="block text-sm font-medium text-gray-300">Short Description</label>
+                          <textarea
+                            id="shortDescription_en"
+                            value={formData.shortDescription_en}
+                            onChange={(e) => setFormData({ ...formData, shortDescription_en: e.target.value })}
+                            className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="longDescription_en" className="block text-sm font-medium text-gray-300">Long Description</label>
+                          <textarea
+                            id="longDescription_en"
+                            value={formData.longDescription_en}
+                            onChange={(e) => setFormData({ ...formData, longDescription_en: e.target.value })}
+                            className="mt-1 block w-full rounded-md bg-black/40 text-white border border-amber-500/20 shadow-sm focus:border-amber-500 focus:ring-amber-500"
+                            rows={5}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Kısa Açıklama</label>
-                      <textarea
-                        value={formData.shortDescription}
-                        onChange={(e) => setFormData(prev => ({ ...prev, shortDescription: e.target.value }))}
-                        className="w-full p-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows="2"
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Fiyat</label>
+                      <input
+                        type="text"
+                        value={formData.price}
+                        onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                        className="w-full p-3 bg-black/40 text-white border border-amber-500/20 rounded-lg placeholder-gray-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Uzun Açıklama</label>
-                      <textarea
-                        value={formData.longDescription}
-                        onChange={(e) => setFormData(prev => ({ ...prev, longDescription: e.target.value }))}
-                        className="w-full p-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows="4"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Resim</label>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Resim</label>
                       <input
                         type="file"
                         onChange={handleImageChange}
-                        className="w-full p-3 bg-white border border-gray-200 rounded-lg text-gray-900"
+                        className="w-full p-3 bg-black/40 text-white border border-amber-500/20 rounded-lg"
                         accept="image/*"
                       />
                       {formData.image && (
@@ -421,7 +553,7 @@ export default function Admin() {
                     <div className="flex flex-col sm:flex-row gap-4">
                       <button
                         type="submit"
-                        className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors w-full sm:w-auto"
+                        className="px-6 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors w-full sm:w-auto"
                       >
                         {selectedItem ? 'Güncelle' : 'Ekle'}
                       </button>
@@ -435,10 +567,13 @@ export default function Admin() {
                               price: '',
                               shortDescription: '',
                               longDescription: '',
-                              image: null
+                              image: null,
+                              name_en: '',
+                              shortDescription_en: '',
+                              longDescription_en: ''
                             });
                           }}
-                          className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors w-full sm:w-auto"
+                          className="px-6 py-3 bg-black/40 text-white rounded-lg hover:bg-black/60 transition-colors w-full sm:w-auto"
                         >
                           İptal
                         </button>
@@ -449,7 +584,7 @@ export default function Admin() {
               </>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-500">Lütfen bir kategori seçin</p>
+                <p className="text-gray-400">Lütfen bir kategori seçin</p>
               </div>
             )}
           </div>
